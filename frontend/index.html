@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NetDiscover · Network Device Discovery</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%236be3c1'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">◈ <span>NET</span>DISCOVER</div>
+  <div class="chips" id="chips"><span class="chip">Checking API…</span></div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="eyebrow">Data Communication · Local LAN</div>
+    <h1>Network Device Discovery</h1>
+    <p>Find devices on a private network with ARP, ICMP and TCP, then analyse what the traffic reveals:
+       vendors, latency, open services and signs of ARP spoofing.</p>
+  </div>
+
+  <div id="demoBanner" class="banner hidden" role="status">
+    ⚠ DEMO MODE: the data below is simulated. No packets were sent on any network.
+  </div>
+
+  <!-- ---------------------------------------------------------------- Scan form -->
+  <section class="card" aria-labelledby="scanHeading">
+    <h2 id="scanHeading">1 · Configure a scan</h2>
+    <div class="form-grid">
+      <div class="field">
+        <label for="subnet">IPv4 subnet (CIDR)</label>
+        <input id="subnet" value="192.168.1.0/24" placeholder="192.168.1.0/24" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="source">Data source</label>
+        <select id="source"><option value="">Real network scan</option></select>
+      </div>
+    </div>
+
+    <div id="subnetInfo" class="info-grid" aria-live="polite"></div>
+
+    <fieldset class="methods">
+      <legend>Discovery techniques</legend>
+      <label class="check"><input type="checkbox" id="mArp" checked>
+        <span><b>ARP</b> <small>Layer 2 · broadcast "who has?" · needs admin + Scapy</small></span></label>
+      <label class="check"><input type="checkbox" id="mIcmp">
+        <span><b>ICMP ping</b> <small>Layer 3 · echo request · gives RTT and TTL</small></span></label>
+      <label class="check"><input type="checkbox" id="mTcp">
+        <span><b>TCP port scan</b> <small>Layer 4 · three-way handshake on found hosts</small></span></label>
+    </fieldset>
+
+    <div class="field" id="portsField">
+      <label for="ports">Ports to probe (TCP scan)</label>
+      <input id="ports" value="22,53,80,135,139,443,445,3389,8080">
+    </div>
+
+    <label class="check" id="authRow"><input type="checkbox" id="authorized">
+      <span>I own this network or have permission to scan it.</span></label>
+
+    <div class="actions">
+      <button id="scanBtn" class="primary">Start discovery ↗</button>
+      <span class="muted small">Only scan networks you own or are authorised to assess.</span>
+    </div>
+    <div class="message" id="message" role="status"></div>
+  </section>
+
+  <!-- ---------------------------------------------------------------- Stats -->
+  <div class="stats">
+    <div class="card stat"><div class="label">Devices in view</div><div class="num" id="deviceCount">—</div></div>
+    <div class="card stat"><div class="label">Alerts in view</div><div class="num" id="alertCount">—</div></div>
+    <div class="card stat"><div class="label">Saved scans</div><div class="num" id="scanCount">—</div></div>
+    <div class="card stat"><div class="label">Latest status</div><div class="num small-num" id="scanStatus">Waiting</div></div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- Alerts -->
+  <section class="card" id="alertsCard" aria-labelledby="alertsHeading">
+    <h2 id="alertsHeading">2 · Findings &amp; ARP-spoofing indicators</h2>
+    <div id="alerts"><div class="empty">Run a scan to see findings.</div></div>
+  </section>
+
+  <section class="card hidden" id="comparisonCard" aria-labelledby="cmpHeading">
+    <h2 id="cmpHeading">ARP vs ICMP: why do the results differ?</h2>
+    <div id="methodComparison"></div>
+  </section>
+
+  <!-- ---------------------------------------------------------------- Devices -->
+  <div class="section-head">
+    <h2>3 · Discovered devices</h2>
+    <input class="search" id="search" placeholder="Filter by IP, MAC, vendor, hostname…" aria-label="Filter devices">
+  </div>
+  <section class="card table-wrap">
+    <table>
+      <thead><tr>
+        <th>IP address</th><th>MAC address</th><th>Vendor (OUI)</th><th>Hostname</th>
+        <th>RTT</th><th>TTL / OS hint</th><th>Open ports</th><th>Found by</th>
+      </tr></thead>
+      <tbody id="deviceRows"><tr><td colspan="8" class="empty">Run a scan to display devices.</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="card" aria-labelledby="topoHeading">
+    <h2 id="topoHeading">Logical topology</h2>
+    <div id="topology" class="topology"><div class="empty">Run a scan to draw the map.</div></div>
+    <p class="muted small">Logical view of which devices answered, centred on the gateway. It does <b>not</b>
+      show physical cabling or which switch port a device uses.</p>
+  </section>
+
+  <!-- ---------------------------------------------------------------- Packet anatomy -->
+  <section class="card" aria-labelledby="pktHeading">
+    <h2 id="pktHeading">4 · Packet anatomy: the ARP request this tool sends</h2>
+    <div class="form-grid">
+      <div class="field"><label for="pktTarget">Target IP ("who has …?")</label>
+        <input id="pktTarget" value="192.168.1.1"></div>
+      <div class="field"><label>&nbsp;</label><button id="pktBtn" class="secondary">Build frame</button></div>
+    </div>
+    <div id="packet"></div>
+  </section>
+
+  <!-- ---------------------------------------------------------------- History -->
+  <div class="section-head"><h2>5 · Scan history &amp; comparison</h2><span class="muted small">Stored in SQLite</span></div>
+  <section class="card">
+    <div class="compare-bar">
+      <div class="field"><label for="cmpOld">Older scan</label><select id="cmpOld"></select></div>
+      <div class="field"><label for="cmpNew">Newer scan</label><select id="cmpNew"></select></div>
+      <button id="cmpBtn" class="secondary">Compare</button>
+    </div>
+    <div id="compareResult"></div>
+    <div class="history" id="history"><div class="empty">Loading saved scans…</div></div>
+  </section>
+
+  <!-- ---------------------------------------------------------------- About -->
+  <section class="card" aria-labelledby="aboutHeading">
+    <h2 id="aboutHeading">How it works</h2>
+    <div class="layers">
+      <div><b>Layer 2 · ARP</b><span>Broadcast frame to <code>ff:ff:ff:ff:ff:ff</code>. Each live host replies with its MAC.</span></div>
+      <div><b>Layer 3 · ICMP</b><span>Echo request/reply. Reply TTL hints at the OS; timing gives RTT.</span></div>
+      <div><b>Layer 4 · TCP</b><span>A completed SYN / SYN-ACK / ACK handshake means the port is open.</span></div>
+      <div><b>Analysis</b><span>Scan-to-scan comparison and duplicate-MAC checks flag possible ARP spoofing.</span></div>
+    </div>
+    <p class="muted small">Limitations: ARP works only inside the local broadcast domain; your own machine does not
+      answer its own ARP request; absent devices may be asleep or isolated; spoofing indicators are hints, not proof.</p>
+  </section>
+</main>
+
+<footer>NETWORK DEVICE DISCOVERY TOOL · Data Communication project</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>
